@@ -373,7 +373,7 @@ class MainPSWindow(QMainWindow):
 	def addDlg(self,dlg):
 		self.dlg=dlg
 		self.ui.graph_loc.addWidget(self.dlg.toolbar,0,Qt.AlignTop)#gridLayout_21
-		self.ui.graph_loc.addWidget(self.dlg.plot,1,Qt.AlignTop)#verticalLayout_2
+		self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
 		self.ui.graph_loc.addWidget(self.dlg.nav,2,Qt.AlignTop)#verticalLayout_2
 		
 	

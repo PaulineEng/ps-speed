@@ -57,6 +57,7 @@ class PlotWdg(FigureCanvasQTAgg):
 		# initialize the canvas where the Figure renders into
 		FigureCanvasQTAgg.__init__(self, self.fig)
 		FigureCanvasQTAgg.setSizePolicy(self,QSizePolicy.Expanding,QSizePolicy.Expanding)
+		self.resize(20, 10)
         
 		self._dirty = False
 		self.collections = []
@@ -75,7 +76,7 @@ class PlotWdg(FigureCanvasQTAgg):
 		if yscale:
 			self.axes.set_yscale( yscale )
             
-		FigureCanvasQTAgg.updateGeometry(self)
+		#FigureCanvasQTAgg.updateGeometry(self)
         
 
 	def itemAt(self, index,icollections):     #for each PlotPS object

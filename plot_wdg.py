@@ -18,8 +18,8 @@ email				: brush.tyler@gmail.com
  *																			*
  ****************************************************************************/
 """
-
-from qgis.PyQt.QtWidgets import QDialog, QVBoxLayout, QApplication
+from qgis.core import QgsMessageLog
+from qgis.PyQt.QtWidgets import QDialog, QVBoxLayout, QApplication, QSizePolicy
 from qgis.PyQt.QtCore import Qt, QVariant
 from qgis.PyQt.QtGui import QCursor
 
@@ -30,9 +30,21 @@ from datetime import datetime, date
 from matplotlib.dates import date2num, num2date, YearLocator, MonthLocator, DayLocator, DateFormatter
 from matplotlib.lines import Line2D
 
-# import the Qt4Agg FigureCanvas object, that binds Figure to
-# Qt4Agg backend. It also inherits from QWidget
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+
+
+class PlotPS():
+	"""Class that define a PS Time"""
+	def __init__(self, x, y=None):
+		self.items=[]
+		self.x=x
+		self.y=y
+		self._trendLines = {}
+
+	def setData(self, x, y=None, info=None):
+		self.x = x if x is not None else []
+		self.y = y if y is not None else []
+		self.info = info if info is not None else []   
 
 
 class PlotWdg(FigureCanvasQTAgg):
@@ -44,7 +56,8 @@ class PlotWdg(FigureCanvasQTAgg):
 
 		# initialize the canvas where the Figure renders into
 		FigureCanvasQTAgg.__init__(self, self.fig)
-
+		FigureCanvasQTAgg.setSizePolicy(self,QSizePolicy.Expanding,QSizePolicy.Expanding)
+        
 		self._dirty = False
 		self.collections = []
 
@@ -61,11 +74,14 @@ class PlotWdg(FigureCanvasQTAgg):
 		yscale = self.props.get('yscale', None)
 		if yscale:
 			self.axes.set_yscale( yscale )
+            
+		FigureCanvasQTAgg.updateGeometry(self)
+        
 
-	def itemAt(self, index):
-		if index >= len(self.x):
+	def itemAt(self, index,icollections):     #for each PlotPS object
+		if index >= len(self.collections[icollections].x):
 			return None
-		return (self.x[index] if self.x else None, self.y[index] if self.y else None)
+		return (self.collections[icollections].x[index] if self.collections[icollections].x else None, self.collections[icollections].y[index] if self.collections[icollections].y else None)
 
 	def delete(self):
 		self._clear()
@@ -105,8 +121,8 @@ class PlotWdg(FigureCanvasQTAgg):
 		self._dirty = False
 
 	def setData(self, x, y=None, info=None):
-		self.x = x if x is not None else []
-		self.y = y if y is not None else []
+		self.x0 = x if x is not None else []
+		self.y0 = y if y is not None else []
 		self.info = info if info is not None else []
 		self._dirty = True
 
@@ -125,18 +141,19 @@ class PlotWdg(FigureCanvasQTAgg):
 		self.axes.set_ylabel( yLabel or "", *args, **kwargs )
 		self.draw()
 
-	def getLimits(self):
-		xlim = self.axes.get_xlim()
-		is_x_date = isinstance(self.x[0], (datetime, date)) if len(self.x) > 0 else False
+	def getLimits(self):   #xlim et ylim globalisées
+		idx=-1
+		self.xlim = self.axes.get_xlim()
+		is_x_date = isinstance((self.x0)[0], (datetime, date)) if len(self.x0) > 0 else False
 		if is_x_date:
-			xlim = num2date(xlim)
 
-		ylim = self.axes.get_ylim()
-		is_y_date = isinstance(self.y[0], (datetime, date)) if self.y is not None and len(self.y) > 0 else False
+			self.xlim = num2date(self.xlim)
+		self.ylim = self.axes.get_ylim()
+		is_y_date = isinstance(self.y0[0], (datetime, date)) if self.y0 is not None and len(self.y0) > 0 else False
 		if is_y_date:
-			ylim = num2date(ylim)
+			self.ylim = num2date(self.ylim)
 
-		return xlim, ylim
+		return self.xlim, self.ylim
 
 	def setLimits(self, xlim=None, ylim=None):
 		""" update the chart limits """
@@ -151,34 +168,32 @@ class PlotWdg(FigureCanvasQTAgg):
 		self.axes.yaxis.grid(hgrid, 'major')
 		self.draw()
 
-	def _removeItem(self, item):
+	def _removeCollection(self, item):  #new
 		try:
 			self.collections.remove( item )
 		except ValueError:
+			QgsMessageLog.logMessage( "Collection not removed" )
 			pass
 
+	def _removeItem(self, item,idx):
 		try:
-			if isinstance(item, (list, tuple, set)):
-				for i in item:
-					i.remove()
-			else:
-				item.remove()
+			self.collections[idx].items.remove(item)
 		except (ValueError, AttributeError):
 			pass
 
 	def _clear(self):
 		for item in self.collections:
-			self._removeItem( item )
 
-		self.collections = []
+			item.items=[]
 
 	def _plot(self):
-		# convert values, then create the plot
-		x = map(PlotWdg._valueFromQVariant, self.x)
-		y = map(PlotWdg._valueFromQVariant, self.y)
+		for idx in range(len(self.collections)):
+			# convert values, then create the plot
+			x = map(PlotWdg._valueFromQVariant, self.collections[idx].x)
+			y = map(PlotWdg._valueFromQVariant, self.collections[idx].y)
 
-		items = self._callPlotFunc('plot', x, y)
-		self.collections.append( items )
+			items = self._callPlotFunc('plot', x, y)
+			self.collections[idx].items=items
 
 	def _callPlotFunc(self, plotfunc, x, y=None, *args, **kwargs):
 		is_x_date = isinstance(x[0], (datetime, date)) if len(x) > 0 else False
@@ -263,42 +278,37 @@ class PlotWdg(FigureCanvasQTAgg):
 
 
 class HistogramPlotWdg(PlotWdg):
-
 	def __init__(self, *args, **kwargs):
 		PlotWdg.__init__(self, *args, **kwargs)
 
 	def _plot(self):
-		# convert values, then create the plot
-		x = map(PlotWdg._valueFromQVariant, self.x)
-
-		items = self._callPlotFunc('hist', x, bins=50)
-		self.collections.append( items )
+		for idx in range(len(self.collections)):
+			# convert values, then create the plot
+			x = map(PlotWdg._valueFromQVariant, self.collections[idx].x)
+			items = self._callPlotFunc('hist', x, bins=50)
+			self.collections[idx].items = items
 
 
 class ScatterPlotWdg(PlotWdg):
-
 	def __init__(self, *args, **kwargs):
 		PlotWdg.__init__(self, *args, **kwargs)
 
 	def _plot(self):
-		# convert values, then create the plot
-		x = map(PlotWdg._valueFromQVariant, self.x)
-		y = map(PlotWdg._valueFromQVariant, self.y)
-
-		items = self._callPlotFunc('scatter', x, y)
-		self.collections.append( items )
+		for idx in range(len(self.collections)):
+			# convert values, then create the plot
+			x = map(PlotWdg._valueFromQVariant, self.collections[idx].x)
+			y = map(PlotWdg._valueFromQVariant, self.collections[idx].y)
+			items = self._callPlotFunc('scatter', x, y)
+			self.collections[idx].items = items
 
 
 class PlotDlg(QDialog):
 	def __init__(self, parent, *args, **kwargs):
 		QDialog.__init__(self, parent, Qt.Window)
 		self.setWindowTitle("Plot dialog")
-
 		layout = QVBoxLayout(self)
-
 		self.plot = self.createPlot(*args, **kwargs)
 		layout.addWidget(self.plot)
-
 		self.nav = self.createToolBar()
 		layout.addWidget(self.nav)
 
@@ -319,7 +329,6 @@ class PlotDlg(QDialog):
 	def refresh(self):
 		# query for refresh
 		self.plot.setDirty(True)
-
 		if self.isVisible():
 			# refresh if it's already visible
 			self.plot.refreshData()
@@ -340,14 +349,6 @@ class HistogramPlotDlg(PlotDlg):
 
 	def createPlot(self, *args, **kwargs):
 		return HistogramPlotWdg(*args, **kwargs)
-
-
-class ScatterPlotDlg(PlotDlg):
-	def __init__(self, *args, **kwargs):
-		PlotDlg.__init__(self, *args, **kwargs)
-
-	def createPlot(self, *args, **kwargs):
-		return ScatterPlotWdg(*args, **kwargs)
 
 
 # import the NavigationToolbar Qt4Agg widget
@@ -465,8 +466,7 @@ class ClippedLine2D(Line2D):
 			self.set_data(x, y)
 
 		Line2D.draw(self, renderer)
-
-
+        
 if __name__ == "__main__":
 	# for command-line arguments
 	import sys

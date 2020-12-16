@@ -21,284 +21,364 @@ email               : brush.tyler@gmail.com
  ***************************************************************************/
 """
 
-from qgis.PyQt.QtCore import Qt, QRegExp, QDate, QFileInfo, QDir
+from qgis.PyQt.QtCore import Qt, QRegExp, QDate, QFileInfo, QDir, pyqtSignal
 from qgis.PyQt.QtGui import QIcon, QCursor
-from qgis.PyQt.QtWidgets import QAction, QInputDialog, QMessageBox, QApplication
+from qgis.PyQt.QtWidgets import QAction, QInputDialog, QMessageBox, QApplication,QMainWindow
 
 from qgis.core import QgsMapLayer, QgsWkbTypes, QgsFeature, QgsFeatureRequest, QgsMessageLog, QgsDataSourceUri, QgsVectorLayer
 
 from . import resources_rc
 
+from .pstimeseries_dlg import MainPSWindow
+
+
 
 class PSTimeSeries_Plugin:
 
-	def __init__(self, iface):
-		self.iface = iface
-		self.featFinder = None
-		self.running = False
+    def __init__(self, iface):
+        self.iface = iface
+        self.featFinder = None
+        self.running = False
 
-		# used to know where to ask for a new time-series tablename
-		self.last_ps_layerid = None
-		self.ts_tablename = None
+        # used to know where to ask for a new time-series tablename
+        self.last_ps_layerid = None
+        self.ts_tablename = None
+        
+        self.window=None
+        self.first_point=True
+    
+    def close_Event(self, e):
+        """Capture la fermeture de la fenêtre"""
+        Dialog_quit = QtGui.QDialog()
+        ui_quit = quit.Ui_Dialog()
+        ui_quit.setupUi(Dialog_quit)
+        res = Dialog_quit.exec_()
+        if res:
+            e.accept()
+        else:
+            e.ignore()
+        
+    def initGui(self):
+        # create the actions
+        self.action = QAction( QIcon( ":/pstimeseries_plugin/icons/logo" ), "PS Time Series Viewer", self.iface.mainWindow() )
+        self.action.triggered.connect( self.run )
+        self.action.setCheckable( True )
+        
+        self.aboutAction = QAction( QIcon( ":/pstimeseries_plugin/icons/about" ), "About", self.iface.mainWindow() )
+        self.aboutAction.triggered.connect( self.about )
 
-	def initGui(self):
-		# create the actions
-		self.action = QAction( QIcon( ":/pstimeseries_plugin/icons/logo" ), "PS Time Series Viewer", self.iface.mainWindow() )
-		self.action.triggered.connect( self.run )
-		self.action.setCheckable( True )
+        # add actions to toolbars and menus
+        self.iface.addToolBarIcon( self.action )
+        self.iface.addPluginToMenu( "&Permanent Scatterers", self.action )
+        #self.iface.addPluginToMenu( "&Permanent Scatterers", self.aboutAction )
 
-		self.aboutAction = QAction( QIcon( ":/pstimeseries_plugin/icons/about" ), "About", self.iface.mainWindow() )
-		self.aboutAction.triggered.connect( self.about )
+    def unload(self):
+        # remove actions from toolbars and menus
+        self.iface.removeToolBarIcon( self.action )
+        self.iface.removePluginMenu( "&Permanent Scatterers", self.action )
+        #self.iface.removePluginMenu( "&Permanent Scatterers", self.aboutAction )
 
-		# add actions to toolbars and menus
-		self.iface.addToolBarIcon( self.action )
-		self.iface.addPluginToMenu( "&Permanent Scatterers", self.action )
-		#self.iface.addPluginToMenu( "&Permanent Scatterers", self.aboutAction )
+    def about(self):
+        """ display the about dialog """
+        from .about_dlg import AboutDlg
+        dlg = AboutDlg( self.iface.mainWindow() )
+        dlg.exec_()
 
-	def unload(self):
-		# remove actions from toolbars and menus
-		self.iface.removeToolBarIcon( self.action )
-		self.iface.removePluginMenu( "&Permanent Scatterers", self.action )
-		#self.iface.removePluginMenu( "&Permanent Scatterers", self.aboutAction )
+    def detect(self):
+        #detects a click on the qgis interface
+        self.window.close.connect(self.reinit)
+        if not self.featFinder:
+            from .MapTools import FeatureFinder
+            self.featFinder = FeatureFinder(self.iface.mapCanvas())
+            #self.featFinder.setAction( self.action )
+            self.featFinder.pointEmitted.connect(self.onPointClicked)
+    
+        # enable the maptool and set a message in the status bar
+        self.featFinder.startCapture()
+        self.iface.mainWindow().statusBar().showMessage( "Click on a point feature in canvas" )
+            
+    def reinit(self):
+        self.nb_series=0
+        self.running = False
+        
+    def run(self):
+        if self.running==False:
+            self.nb_series=0
+            self.window= MainPSWindow(self.iface)
+            self.window.show()
+            self.running=True
+        
+        self.detect()
+            
+    def onPointClicked(self, point):
+        layer = self.iface.activeLayer()
+        if not layer or layer.type() != QgsMapLayer.VectorLayer or layer.geometryType() != QgsWkbTypes.PointGeometry:
+            QMessageBox.information(self.iface.mainWindow(), "PS Time Series Viewer", "Select a vector layer and try again.")
+            return
 
-	def about(self):
-		""" display the about dialog """
-		from .about_dlg import AboutDlg
-		dlg = AboutDlg( self.iface.mainWindow() )
-		dlg.exec_()
+        try:
+            self._onPointClicked( layer, point ) #dlg = 
+        finally:
+            self.detect()
 
-	def run(self):
-		# create a maptool to select a point feature from the canvas
-		if not self.featFinder:
-			from .MapTools import FeatureFinder
-			self.featFinder = FeatureFinder(self.iface.mapCanvas())
-			self.featFinder.setAction( self.action )
-			self.featFinder.pointEmitted.connect(self.onPointClicked)
+    def _onPointClicked(self, ps_layer, point):
+        # get the id of the point feature under the mouse click
+        from .MapTools import FeatureFinder
+        fid = FeatureFinder.findAtPoint(ps_layer, point, canvas=self.iface.mapCanvas(), onlyTheClosestOne=True, onlyIds=True)
+        if fid is None:
+            return
+        # get the attribute map of the selected feature
+        feat = QgsFeature()
+        feats = ps_layer.getFeatures( QgsFeatureRequest(fid) )
+        feats.nextFeature(feat)
+        attrs = feat.attributes()
 
-		# enable the maptool and set a message in the status bar
-		self.featFinder.startCapture()
-		self.iface.mainWindow().statusBar().showMessage( "Click on a point feature in canvas" )
+        x, y = [], []    # lists containg x,y values
+        infoFields = {}    # hold the index->name of the fields containing info to be displayed
 
-	def onPointClicked(self, point):
-		layer = self.iface.activeLayer()
-		if not layer or layer.type() != QgsMapLayer.VectorLayer or layer.geometryType() != QgsWkbTypes.PointGeometry:
-			QMessageBox.information(self.iface.mainWindow(), "PS Time Series Viewer", "Select a vector layer and try again.")
-			return
+        ps_source = ps_layer.source()
+        ps_fields = ps_layer.dataProvider().fields()
 
-		# set the waiting cursor
-		QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-		try:
-			dlg = self._onPointClicked( layer, point )
-		finally:
-			# restore the cursor
-			QApplication.restoreOverrideCursor()
+        providerType = ps_layer.providerType()
+        uri = ps_source
+        subset = ""
+        if ps_source.lower().endswith( ".shp" ): #providerType == 'ogr' and
+            # Shapefile
+            QgsMessageLog.logMessage( "Type is .shp" )
+            
+            for idx, fld in enumerate(ps_fields):
+                if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
+                    # info fields are all except those containing dates
+                    infoFields[ idx ] = fld
+                else:
+                    x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
+                    y.append( float(attrs[ idx ]) )
 
-		if dlg:
-			dlg.exec_()
+        elif providerType == 'ogr' and (ps_source.upper().startswith("OCI:") or ps_source.lower().endswith(".vrt")):    # Oracle Spatial
+            # fields containing values
+            dateField = "data_misura"
+            valueField = "spost_rel_mm"
+            infoFields = dict(enumerate(ps_fields))
 
-		self.run()
+            # search for the id_dataset and code_target fields needed to join
+            # PS and TS tables
+            idDataset = codeTarget = None
+            for idx, fld in enumerate(ps_fields):
+                if fld.name().lower() == "id_dataset":
+                    idDataset = attrs[ idx ]
+                if fld.name().lower() == "code_target":
+                    codeTarget = attrs[ idx ]
 
-	def _onPointClicked(self, ps_layer, point):
-		# get the id of the point feature under the mouse click
-		from .MapTools import FeatureFinder
-		fid = FeatureFinder.findAtPoint(ps_layer, point, canvas=self.iface.mapCanvas(), onlyTheClosestOne=True, onlyIds=True)
-		if fid is None:
-			return
+            if idDataset is None or codeTarget is None:
+                QgsMessageLog.logMessage( "idDataset is %s, codeTarget is %s. Exiting" % (idDataset, codeTarget), "PSTimeSeriesViewer" )
+                return
+            subset = "id_dataset='%s' AND code_target='%s'" % (idDataset, codeTarget)
 
-		# get the attribute map of the selected feature
-		feat = QgsFeature()
-		feats = ps_layer.getFeatures( QgsFeatureRequest(fid) )
-		feats.nextFeature(feat)
-		attrs = feat.attributes()
+            # create the uri
+            if ps_source.upper().startswith( "OCI:" ):
+                default_tbl_name = "RISKNAT.RNAT_TARGET_SSTO"
+            elif ps_source.lower().endswith(".vrt"):
+                default_tbl_name = "rnat_target_sso.vrt"
+            else:
+                default_tbl_name = ""
+            if not self._askTStablename( ps_layer,  default_tbl_name ):
+                return
 
-		x, y = [], []	# lists containg x,y values
-		infoFields = {}	# hold the index->name of the fields containing info to be displayed
+            if ps_source.upper().startswith( "OCI:" ):
+                # uri is like OCI:userid/password@database:table
+                pos = uri.indexOf(':', 4)
+                if pos >= 0:
+                    uri = uri[0:pos]
+                uri = "%s:%s" % (uri, self.ts_tablename)
+            else:
+                # it's a VRT file
+                uri = "%s/%s" % (QFileInfo(ps_source).path(), self.ts_tablename)
+                uri = QDir.toNativeSeparators( uri )
 
-		ps_source = ps_layer.source()
-		ps_fields = ps_layer.dataProvider().fields()
+            # load the layer containing time series
+            ts_layer = self._createTSlayer( uri, providerType, subset )
+            if ts_layer is None:
+                return
 
-		providerType = ps_layer.providerType()
-		uri = ps_source
-		subset = ""
+            # get time series X and Y values
+            try:
+                x, y = self._getXYvalues( ts_layer, dateField, valueField )
+            finally:
+                ts_layer.deleteLater()
+                del ts_layer
 
-		if providerType == 'ogr' and ps_source.lower().endswith( ".shp" ):
-			# Shapefile
-			for idx, fld in enumerate(ps_fields):
-				if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
-					# info fields are all except those containing dates
-					infoFields[ idx ] = fld
-				else:
-					x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
-					y.append( float(attrs[ idx ]) )
+        elif providerType in ['postgres', 'spatialite']:# either PostGIS or SpatiaLite
+            # fields containing values
+            dateField = "dataripresa"
+            valueField = "valore"
+            infoFields = dict(enumerate(ps_fields))
 
-		elif providerType == 'ogr' and (ps_source.upper().startswith("OCI:") or ps_source.lower().endswith(".vrt")):	# Oracle Spatial
+            # search for the id_dataset and code_target fields needed to join
+            # PS and TS tables
+            code = None
+            for idx, fld in enumerate( ps_fields ):
+                if fld.name().lower() == "code":
+                    code = attrs[ idx ]
 
-			# fields containing values
-			dateField = "data_misura"
-			valueField = "spost_rel_mm"
-			infoFields = dict(enumerate(ps_fields))
+            if code is None:
+                QgsMessageLog.logMessage( "code is None. Exiting" % code, "PSTimeSeriesViewer" )
+                return
+            subset = "code='%s'" % code
 
-			# search for the id_dataset and code_target fields needed to join
-			# PS and TS tables
-			idDataset = codeTarget = None
-			for idx, fld in enumerate(ps_fields):
-				if fld.name().lower() == "id_dataset":
-					idDataset = attrs[ idx ]
-				if fld.name().lower() == "code_target":
-					codeTarget = attrs[ idx ]
+            # create the uri
+            dsuri = QgsDataSourceUri( ps_layer.source() )
+            default_tbl_name = "ts_%s" % dsuri.table()
+            if not self._askTStablename( ps_layer,  default_tbl_name ):
+                return
+            dsuri.setDataSource( dsuri.schema(), self.ts_tablename, None ) # None or "" ? check during tests
+            dsuri.setWkbType(QgsWkbTypes.Unknown)
+            dsuri.setSrid(None)
+            uri = dsuri.uri()
 
-			if idDataset is None or codeTarget is None:
-				QgsMessageLog.logMessage( "idDataset is %s, codeTarget is %s. Exiting" % (idDataset, codeTarget), "PSTimeSeriesViewer" )
-				return
-			subset = "id_dataset='%s' AND code_target='%s'" % (idDataset, codeTarget)
+            # load the layer containing time series
+            ts_layer = self._createTSlayer( uri, providerType, subset )
+            if ts_layer is None:
+                return
 
-			# create the uri
-			if ps_source.upper().startswith( "OCI:" ):
-				default_tbl_name = "RISKNAT.RNAT_TARGET_SSTO"
-			elif ps_source.lower().endswith(".vrt"):
-				default_tbl_name = "rnat_target_sso.vrt"
-			else:
-				default_tbl_name = ""
-			if not self._askTStablename( ps_layer,  default_tbl_name ):
-				return
+            # get time series X and Y values
+            try:
+                x, y = self._getXYvalues( ts_layer, dateField, valueField )
+            finally:
+                ts_layer.deleteLater()
+                del ts_layer
+        elif ps_source.lower().split("|")[0].endswith( ".shp" ): #providerType == 'ogr' and
+            # Shapefile
+            QgsMessageLog.logMessage( ".shp well opened" )
+            
+            for idx, fld in enumerate(ps_fields):
+                if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
+                    # info fields are all except those containing dates
+                    infoFields[ idx ] = fld
+                else:
+                    x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
+                    y.append( float(attrs[ idx ]) )
 
-			if ps_source.upper().startswith( "OCI:" ):
-				# uri is like OCI:userid/password@database:table
-				pos = uri.indexOf(':', 4)
-				if pos >= 0:
-					uri = uri[0:pos]
-				uri = "%s:%s" % (uri, self.ts_tablename)
-			else:
-				# it's a VRT file
-				uri = "%s/%s" % (QFileInfo(ps_source).path(), self.ts_tablename)
-				uri = QDir.toNativeSeparators( uri )
+        else:
+            QgsMessageLog.logMessage( "Type is invalid" )
+        if len(x) * len(y) <= 0:
+            QMessageBox.warning( self.iface.mainWindow(),
+                    "PS Time Series Viewer",
+                    "No time series values found for the selected point. \n x vaut "+str(len(x))+ "et y vaut "+str(len(y))+".")
+            QgsMessageLog.logMessage( "provider: %s - uri: %s\nsubset: %s" % (providerType, uri, subset), "PSTimeSeriesViewer" )
+            return
 
-			# load the layer containing time series
-			ts_layer = self._createTSlayer( uri, providerType, subset )
-			if ts_layer is None:
-				return
+        # display the plot dialog
+        from .pstimeseries_dlg import PSTimeSeries_Dlg
+        
+        try:
+            if self.nb_series==0 or self.first_point==True:
+                    #QMessageBox.warning(self.iface.mainWindow(), "infos", "x="+str(x[0])+"; y="+str(y[0]))
+                self.dlg = PSTimeSeries_Dlg( ps_layer, infoFields )
+                self.dlg.setFeatureId( fid ) 
+                self.dlg.plot.setData( x, y )  
+                self.dlg.addPlotPS( x, y )
+                self.dlg.plot._updateLists()
+                self.window.addDlg( self.dlg ) 
+                self.nb_series+=1
+                self.first_point=False
+                
+            else:
+                    
+                self.window.dlg.addLayer( ps_layer, infoFields )                         
+                self.window.dlg.addFeatureId( fid )    
+                self.window.dlg.plot.setData( x, y )    
+                self.window.dlg.addPlotPS( x, y )   
+                self.window.dlg.plot._updateLists() 
+                self.window.dlg.refresh()                           
+                self.nb_series+=1
+                
+            #self._askTStablename(ps_layer)
+        except ValueError:
+            pass
+            
+        finally:
+            self.window.ui.list_series.addItem(ps_layer.sourceName()+";   Point "+str(fid))
+            return     #"(self.dlg)
 
-			# get time series X and Y values
-			try:
-				x, y = self._getXYvalues( ts_layer, dateField, valueField )
-			finally:
-				ts_layer.deleteLater()
-				del ts_layer
+    def _getXYvalues(self, ts_layer, dateField, valueField):
+        # utility function used to get the X and Y values
+        x, y = [], []
 
-		elif providerType in ['postgres', 'spatialite']:# either PostGIS or SpatiaLite
+        # get indexes of date (x) and value (y) fields
+        dateIdx, valueIdx = None, None
+        for idx, fld in enumerate(ts_layer.dataProvider().fields()):
+            if fld.name().lower() == dateField:
+                dateIdx = idx
+            elif fld.name().lower() == valueField:
+                valueIdx = idx
 
-			# fields containing values
-			dateField = "dataripresa"
-			valueField = "valore"
-			infoFields = dict(enumerate(ps_fields))
+        if dateIdx is None or valueIdx is None:
+            QgsMessageLog.logMessage("field %s -> index %s, field %s -> index %s. Exiting" % (dateField, dateIdx, valueField, valueIdx), "PSTimeSeriesViewer")
+            return
 
-			# search for the id_dataset and code_target fields needed to join
-			# PS and TS tables
-			code = None
-			for idx, fld in enumerate( ps_fields ):
-				if fld.name().lower() == "code":
-					code = attrs[ idx ]
+        # fetch and loop through all the features
+        request = QgsFeatureRequest()
+        request.setSubsetOfAttributes([dateIdx, valueIdx])
+        for f in ts_layer.getFeatures( request ):
+            # get x and y values
+            a = f.attributes()
+            x.append( QDate.fromString( a[ dateIdx ], "yyyyMMdd" ).toPyDate() )
+            y.append( float(a[ valueIdx ]) )
 
-			if code is None:
-				QgsMessageLog.logMessage( "code is None. Exiting" % code, "PSTimeSeriesViewer" )
-				return
-			subset = "code='%s'" % code
+        return x, y
 
-			# create the uri
-			dsuri = QgsDataSourceUri( ps_layer.source() )
-			default_tbl_name = "ts_%s" % dsuri.table()
-			if not self._askTStablename( ps_layer,  default_tbl_name ):
-				return
-			dsuri.setDataSource( dsuri.schema(), self.ts_tablename, None ) # None or "" ? check during tests
-			dsuri.setWkbType(QgsWkbTypes.Unknown)
-			dsuri.setSrid(None)
-			uri = dsuri.uri()
+    def _askTStablename(self, ps_layer, default_tblname=None):
+        # utility function used to ask to the user the name of the table
+        # containing time series data
+        if default_tblname is None:
+            default_tblname = ""
 
-			# load the layer containing time series
-			ts_layer = self._createTSlayer( uri, providerType, subset )
-			if ts_layer is None:
-				return
+        # ask a tablename to the user
+        if ps_layer.id() != self.last_ps_layerid or not self.ts_tablename:
+            tblname, ok = QInputDialog.getText( self.iface.mainWindow(),
+                    "PS Time Series Viewer",
+                    "Insert the name of the table containing time-series",
+                    text=default_tblname )
+            if not ok:
+                return False
 
-			# get time series X and Y values
-			try:
-				x, y = self._getXYvalues( ts_layer, dateField, valueField )
-			finally:
-				ts_layer.deleteLater()
-				del ts_layer
+            self.ts_tablename = tblname
+            self.last_ps_layerid = ps_layer.id()
 
-		if len(x) * len(y) <= 0:
-			QMessageBox.warning( self.iface.mainWindow(),
-					"PS Time Series Viewer",
-					"No time series values found for the selected point." )
-			QgsMessageLog.logMessage( "provider: %s - uri: %s\nsubset: %s" % (providerType, uri, subset), "PSTimeSeriesViewer" )
-			return
+        return True
 
-		# display the plot dialog
-		from .pstimeseries_dlg import PSTimeSeries_Dlg
-		dlg = PSTimeSeries_Dlg( ps_layer, infoFields )
-		dlg.setFeatureId( fid )
-		dlg.setData( x, y )
-		return dlg
+    def _createTSlayer(self, uri, providerType, subset=None):
+        # utility function used to create the vector layer containing time
+        # series data
+        layer = QgsVectorLayer( uri, "time_series_layer", providerType )
+        if not layer.isValid():
+            QMessageBox.warning( self.iface.mainWindow(),
+                    "PS Time Series Viewer",
+                    "The layer '%s' wasn't found." % self.ts_tablename )
+            self.ts_tablename = None
+            return
 
-	def _getXYvalues(self, ts_layer, dateField, valueField):
-		# utility function used to get the X and Y values
-		x, y = [], []
+        if subset is not None:
+            layer.setSubsetString( subset )
 
-		# get indexes of date (x) and value (y) fields
-		dateIdx, valueIdx = None, None
-		for idx, fld in enumerate(ts_layer.dataProvider().fields()):
-			if fld.name().lower() == dateField:
-				dateIdx = idx
-			elif fld.name().lower() == valueField:
-				valueIdx = idx
+        return layer
+    
+    
+#difference of 2 time series
+class Diff2series():
+    def __init__(self, x1, y1, x2, y2):
+        self.x1 = x1 if x1 is not None else []
+        self.y1 = y1 if y1 is not None else []
+        self.x2 = x2 if x2 is not None else []
+        self.y2 = y2 if y2 is not None else []
+        
+    def doTheDiff(self):
+        if self.x1 == self.x2:
+            x3 = self.x1
+            y3 = self.y1 - self.y2
+        else:
+            QMessageBox.warning( self.iface.mainWindow(),"PS Time Series Viewer","Times don't correspond." % self.ts_tablename )
 
-		if dateIdx is None or valueIdx is None:
-			QgsMessageLog.logMessage("field %s -> index %s, field %s -> index %s. Exiting" % (dateField, dateIdx, valueField, valueIdx), "PSTimeSeriesViewer")
-			return
-
-		# fetch and loop through all the features
-		request = QgsFeatureRequest()
-		request.setSubsetOfAttributes([dateIdx, valueIdx])
-		for f in ts_layer.getFeatures( request ):
-			# get x and y values
-			a = f.attributes()
-			x.append( QDate.fromString( a[ dateIdx ], "yyyyMMdd" ).toPyDate() )
-			y.append( float(a[ valueIdx ]) )
-
-		return x, y
-
-	def _askTStablename(self, ps_layer, default_tblname=None):
-		# utility function used to ask to the user the name of the table
-		# containing time series data
-		if default_tblname is None:
-			default_tblname = ""
-
-		# ask a tablename to the user
-		if ps_layer.id() != self.last_ps_layerid or not self.ts_tablename:
-			tblname, ok = QInputDialog.getText( self.iface.mainWindow(),
-					"PS Time Series Viewer",
-					"Insert the name of the table containing time-series",
-					text=default_tblname )
-			if not ok:
-				return False
-
-			self.ts_tablename = tblname
-			self.last_ps_layerid = ps_layer.id()
-
-		return True
-
-	def _createTSlayer(self, uri, providerType, subset=None):
-		# utility function used to create the vector layer containing time
-		# series data
-		layer = QgsVectorLayer( uri, "time_series_layer", providerType )
-		if not layer.isValid():
-			QMessageBox.warning( self.iface.mainWindow(),
-					"PS Time Series Viewer",
-					"The layer '%s' wasn't found." % self.ts_tablename )
-			self.ts_tablename = None
-			return
-
-		if subset is not None:
-			layer.setSubsetString( subset )
-
-		return layer
+        return x3, y3
+    
+    

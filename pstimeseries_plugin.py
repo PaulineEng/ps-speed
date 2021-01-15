@@ -49,7 +49,7 @@ class PSTimeSeries_Plugin:
     
     def close_Event(self, e):
         """Capture la fermeture de la fenêtre"""
-        Dialog_quit = QtGui.QDialog()
+        Dialog_quit = qgis.PyQt.QtGui.QDialog()
         ui_quit = quit.Ui_Dialog()
         ui_quit.setupUi(Dialog_quit)
         res = Dialog_quit.exec_()
@@ -249,7 +249,6 @@ class PSTimeSeries_Plugin:
         elif ps_source.lower().split("|")[0].endswith( ".shp" ): #providerType == 'ogr' and
             # Shapefile
             QgsMessageLog.logMessage( ".shp well opened" )
-            
             for idx, fld in enumerate(ps_fields):
                 if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
                     # info fields are all except those containing dates
@@ -257,9 +256,10 @@ class PSTimeSeries_Plugin:
                 else:
                     x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
                     y.append( float(attrs[ idx ]) )
-
         else:
             QgsMessageLog.logMessage( "Type is invalid" )
+            
+            
         if len(x) * len(y) <= 0:
             QMessageBox.warning( self.iface.mainWindow(),
                     "PS Time Series Viewer",
@@ -283,7 +283,6 @@ class PSTimeSeries_Plugin:
                 self.first_point=False
                 
             else:
-                    
                 self.window.dlg.addLayer( ps_layer, infoFields )                         
                 self.window.dlg.addFeatureId( fid )    
                 self.window.dlg.plot.setData( x, y )    
@@ -299,6 +298,8 @@ class PSTimeSeries_Plugin:
         finally:
             self.window.ui.list_series.addItem(ps_layer.sourceName()+";   Point "+str(fid))
             return     #"(self.dlg)
+
+#------------------------------------------------------------------------------------------
 
     def _getXYvalues(self, ts_layer, dateField, valueField):
         # utility function used to get the X and Y values
@@ -327,6 +328,8 @@ class PSTimeSeries_Plugin:
 
         return x, y
 
+#---------------------------------------------------------------------------------------------
+
     def _askTStablename(self, ps_layer, default_tblname=None):
         # utility function used to ask to the user the name of the table
         # containing time series data
@@ -347,6 +350,8 @@ class PSTimeSeries_Plugin:
 
         return True
 
+#--------------------------------------------------------------------------------------------
+
     def _createTSlayer(self, uri, providerType, subset=None):
         # utility function used to create the vector layer containing time
         # series data
@@ -362,23 +367,60 @@ class PSTimeSeries_Plugin:
             layer.setSubsetString( subset )
 
         return layer
-    
+
+#-----------------------------------------------------------------------------------------
+
+    #def _onPlotDiffClicked(self) :
+        #Display plot
+        
+
     
 #difference of 2 time series
 class Diff2series():
-    def __init__(self, x1, y1, x2, y2):
-        self.x1 = x1 if x1 is not None else []
-        self.y1 = y1 if y1 is not None else []
-        self.x2 = x2 if x2 is not None else []
-        self.y2 = y2 if y2 is not None else []
+    def __init__(self):
+        
+        self.window.ui.list_series
+        self.x1, y1 = self._getXYvalues( self.ts_layer, self.dateField, self.valueField )
+        self.x2, y2 = self._getXYvalues( self.ts_layer, self.dateField, self.valueField )
+        self.fid1 = self._onPointClicked.fid1
+        self.fid2 = self._onPointClicked.fid2
+        self.infoFields1 = self._onPointClicked.infoFields1
+        self.infoFields2 = self._onPointClicked.infoFields2
         
     def doTheDiff(self):
         if self.x1 == self.x2:
-            x3 = self.x1
-            y3 = self.y1 - self.y2
+            x = self.x1
+            ydiff = self.y1 - self.y2
         else:
-            QMessageBox.warning( self.iface.mainWindow(),"PS Time Series Viewer","Times don't correspond." % self.ts_tablename )
+            QMessageBox.warning( self.iface.mainWindow(),"PS Time Series Viewer","No match in time." % self.ts_tablename )
 
-        return x3, y3
+        return x, ydiff
+    
+    def plotDiff(self, ps_layer1, point1, ps_layer2, point2):
+        from .pstimeseries_dlg import PSTimeSeries_Dlg
+    
+        try:
+            if self.nb_series==0 or self.first_point==True:
+                    #QMessageBox.warning(self.iface.mainWindow(), "infos", "x="+str(x[0])+"; y="+str(y[0]))
+                self.dlg.plot.setData( self.xdiff, self.ydiff )  
+                self.dlg.addPlotPS( self.xdiff, self.ydiff )
+                self.dlg.plot._updateLists()
+                self.window.addDlg( self.dlg ) 
+                self.nb_series+=1
+                self.first_point=False
+                
+            else:   
+                self.window.dlg.plot.setData( self.xdiff, self.ydiff )    
+                self.window.dlg.addPlotPS( self.xdiff, self.ydiff )   
+                self.window.dlg.plot._updateLists() 
+                self.window.dlg.refresh()                           
+                self.nb_series+=1
+                
+        except ValueError:
+            pass
+            
+        finally:
+            self.window.ui.list_series.addItem(ps_layer1.sourceName()+";   Point "+str(self.fid1)+"-"+ps_layer2.sourceName()+";   Point "+str(self.fid2))
+            return     #"(self.dlg)
     
     

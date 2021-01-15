@@ -37,6 +37,8 @@ from . import resources_rc
 
 from .graph_settings_dialog import GraphSettings_Dlg
 
+from .ui.Ps_Time_Serie_Viewer_ui import Ui_Form
+
 
 class PSTimeSeries_Dlg(QDialog):
 
@@ -160,6 +162,7 @@ class PSTimeSeries_Dlg(QDialog):
 	def updateLimits(self, xlim, ylim):
 		self.toolbar.setLimits( xlim, ylim, True )
 
+#------------------------------------------------------------------------------------------
 
 class PlotGraph(PlotWdg):
 	def __init__(self, *args, **kwargs):
@@ -331,8 +334,7 @@ class PlotGraph(PlotWdg):
 	
 			self.draw()
 
-
-from .ui.Ps_Time_Serie_Viewer_ui import Ui_Form
+#------------------------------------------------------------------------------------------
 
 class MainPSWindow(QMainWindow): 
 	click_ref=pyqtSignal(QgsPoint, Qt.MouseButton)
@@ -375,7 +377,43 @@ class MainPSWindow(QMainWindow):
 		self.ui.graph_loc.addWidget(self.dlg.toolbar,0,Qt.AlignTop)#gridLayout_21
 		self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
 		self.ui.graph_loc.addWidget(self.dlg.nav,2,Qt.AlignTop)#verticalLayout_2
-		
+        
+	def plot_diff(self,dlg):
+		try :
+            self.dlg.plot.collections[idx]
+			#self.nb_series==0 or self.first_point==True:
+            #QMessageBox.warning(self.iface.mainWindow(), "infos", "x="+str(x[0])+"; y="+str(y[0]))
+            #self.dlg = PSTimeSeries_Dlg( ps_layer, infoFields )
+            #self.dlg.setFeatureId( fid ) 
+            #self.dlg.plot.setData( x, y )  
+			#self.dlg.addPlotPS( x, y )
+			#self.dlg.plot._updateLists()
+			self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
+			#self.nb_series+=1
+			#self.first_point=False
+			#self.ui.graph_loc.addDlg(self.dlg)
+
+#-------------------------------
+
+                    if self.x1 == self.x2:
+            x = self.x1
+            ydiff = self.y1 - self.y2
+        else:
+            QMessageBox.warning( self.iface.mainWindow(),"PS Time Series Viewer","No match in time." % self.ts_tablename )
+
+        return x, ydiff
+    #----------------
+                for idx, fld in enumerate(ps_fields):
+                if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
+                    # info fields are all except those containing dates
+                    infoFields[ idx ] = fld
+                else:
+                    x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
+                    y.append( float(attrs[ idx ]) )
+    
+    
+		except :
+			QMessageBox.information(self.iface.mainWindow(), " ", "Nope", QMessageBox.Ok)
 	
 	##### Buttons#####################################################################################################
 		
@@ -519,9 +557,6 @@ class MainPSWindow(QMainWindow):
 			QMessageBox.information(self.iface.mainWindow(), "PS Time Series Viewer", "No point ")
 	
 		#QMessageBox.information( self.iface.mainWindow(),"Info", "X,Y = %s,%s" % (str(point.x()),str(point.y())) )
-	
-		
-		
 		
 	# def plot_legend(self):
 	# 	path=self.ui.layers_for_options.selectedItems()
@@ -585,7 +620,8 @@ class MainPSWindow(QMainWindow):
 		self.ui.time_series_push.clicked.connect(self.load_time_series)
 		self.ui.gnss_push.clicked.connect(self.load_gnss)
 		self.ui.ref_push.clicked.connect(self.load_ref)
-		self.ui.remove_push.clicked.connect(self.remove_ts) 
+		self.ui.remove_push.clicked.connect(self.remove_ts)
+		self.ui.plot_difference.clicked.connect(self.plot_diff)
 		self.ui.new_ref.clicked.connect(self.new_ref)
 		self.ui.create_new_ref_push.clicked.connect(self.create_new_ref)
 		#self.ui.params_ok.clicked.connect(self.plot_legend)
@@ -734,6 +770,7 @@ class ToolPSToolbar(QWidget, Ui_ToolPSToolBar):
 
 		self.updateTitleSig.emit( params)
 
+#------------------------------------------------------------------------------------------
 
 class NavToolbar(NavigationToolbar):
 	updateRequested = pyqtSignal()

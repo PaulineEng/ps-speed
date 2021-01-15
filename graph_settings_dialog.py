@@ -34,7 +34,6 @@ class GraphSettings_Dlg(QDialog, Ui_Dialog):
 	def __init__(self, parent=None):
 		QDialog.__init__(self, parent)
 		self.setupUi(self)
-
 		self.titleBoldBtn.hide()
 		self.titleItalicBtn.hide()
 		self.labelsBoldBtn.hide()
@@ -246,10 +245,8 @@ class GraphSettings_Dlg(QDialog, Ui_Dialog):
 		settings = QgsSettings()
 		settings.setValue("/pstimeseries/titleProps", self.titleFontProps())
 		settings.setValue("/pstimeseries/labelsProps", self.labelsFontProps())
-
 		settings.setValue("/pstimeseries/pointsProps", self.pointsProps())
 		settings.setValue("/pstimeseries/pointsReplicasProps", self.pointsReplicasProps())
-
 		settings.setValue("/pstimeseries/linesProps", self.linesProps())
 		settings.setValue("/pstimeseries/linesThrendProps", self.linesThrendProps())
 

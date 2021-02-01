@@ -146,11 +146,11 @@ class PSTimeSeries_Plugin:
             # Shapefile
             QgsMessageLog.logMessage( "Type is .shp" )
             
-            for idx, fld in enumerate(ps_fields):
-                if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
+            for idx, fld in enumerate(ps_fields) :
+                if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0 :
                     # info fields are all except those containing dates
                     infoFields[ idx ] = fld
-                else:
+                else :
                     x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
                     y.append( float(attrs[ idx ]) )
 
@@ -367,60 +367,4 @@ class PSTimeSeries_Plugin:
             layer.setSubsetString( subset )
 
         return layer
-
-#-----------------------------------------------------------------------------------------
-
-    #def _onPlotDiffClicked(self) :
-        #Display plot
-        
-
-    
-#difference of 2 time series
-class Diff2series():
-    def __init__(self):
-        
-        self.window.ui.list_series
-        self.x1, y1 = self._getXYvalues( self.ts_layer, self.dateField, self.valueField )
-        self.x2, y2 = self._getXYvalues( self.ts_layer, self.dateField, self.valueField )
-        self.fid1 = self._onPointClicked.fid1
-        self.fid2 = self._onPointClicked.fid2
-        self.infoFields1 = self._onPointClicked.infoFields1
-        self.infoFields2 = self._onPointClicked.infoFields2
-        
-    def doTheDiff(self):
-        if self.x1 == self.x2:
-            x = self.x1
-            ydiff = self.y1 - self.y2
-        else:
-            QMessageBox.warning( self.iface.mainWindow(),"PS Time Series Viewer","No match in time." % self.ts_tablename )
-
-        return x, ydiff
-    
-    def plotDiff(self, ps_layer1, point1, ps_layer2, point2):
-        from .pstimeseries_dlg import PSTimeSeries_Dlg
-    
-        try:
-            if self.nb_series==0 or self.first_point==True:
-                    #QMessageBox.warning(self.iface.mainWindow(), "infos", "x="+str(x[0])+"; y="+str(y[0]))
-                self.dlg.plot.setData( self.xdiff, self.ydiff )  
-                self.dlg.addPlotPS( self.xdiff, self.ydiff )
-                self.dlg.plot._updateLists()
-                self.window.addDlg( self.dlg ) 
-                self.nb_series+=1
-                self.first_point=False
-                
-            else:   
-                self.window.dlg.plot.setData( self.xdiff, self.ydiff )    
-                self.window.dlg.addPlotPS( self.xdiff, self.ydiff )   
-                self.window.dlg.plot._updateLists() 
-                self.window.dlg.refresh()                           
-                self.nb_series+=1
-                
-        except ValueError:
-            pass
-            
-        finally:
-            self.window.ui.list_series.addItem(ps_layer1.sourceName()+";   Point "+str(self.fid1)+"-"+ps_layer2.sourceName()+";   Point "+str(self.fid2))
-            return     #"(self.dlg)
-    
     

@@ -22,7 +22,7 @@ email               : brush.tyler@gmail.com
 """
 
 import re
-from qgis.PyQt.QtCore import pyqtSignal, Qt, QObject
+from qgis.PyQt.QtCore import pyqtSignal, Qt, QObject, QRegExp, QDate
 from qgis.PyQt.QtWidgets import QApplication, QWidget, QAction, QDockWidget,QMainWindow,QFileDialog,QDialog,QPushButton,QLabel,QTextEdit,QVBoxLayout,QMessageBox
 from qgis.PyQt.QtGui import QIcon
 
@@ -38,6 +38,8 @@ from . import resources_rc
 from .graph_settings_dialog import GraphSettings_Dlg
 
 from .ui.Ps_Time_Serie_Viewer_ui import Ui_Form
+
+from .MapTools import FeatureFinder
 
 
 class PSTimeSeries_Dlg(QDialog):
@@ -378,43 +380,60 @@ class MainPSWindow(QMainWindow):
 		self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
 		self.ui.graph_loc.addWidget(self.dlg.nav,2,Qt.AlignTop)#verticalLayout_2
         
-	def plot_diff(self,dlg):
-		try :
-            self.dlg.plot.collections[idx]
-			#self.nb_series==0 or self.first_point==True:
-            #QMessageBox.warning(self.iface.mainWindow(), "infos", "x="+str(x[0])+"; y="+str(y[0]))
-            #self.dlg = PSTimeSeries_Dlg( ps_layer, infoFields )
-            #self.dlg.setFeatureId( fid ) 
-            #self.dlg.plot.setData( x, y )  
-			#self.dlg.addPlotPS( x, y )
-			#self.dlg.plot._updateLists()
-			self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
-			#self.nb_series+=1
-			#self.first_point=False
-			#self.ui.graph_loc.addDlg(self.dlg)
+	def plot_diff(self,dlg) :
+		self.nb_series=0
+		toSelect = self.ui.list_series.selectedItems()
+		x, y = [], []    # lists containg x,y values
+		infoFields = {}    # hold the index->name of the fields containing info to be displayed
+		feat = QgsFeature()
+		attrs = feat.attributes()
+        
+		if toSelect != []:
+			for elem in toSelect:
+				#self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
+				idx = self.ui.list_series.row(elem)
+				ps_layer = self.dlg.plot.collections[idx]
+				#ps_fields = ps_layer.dataProvider().fields()
+				QMessageBox.information(self.iface.mainWindow(), " ", "Ca marche jusque là", QMessageBox.Ok)
+                
+		for idx, fld in enumerate(ps_layer):
+			if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
+                # info fields are all except those containing dates
+				infoFields[ idx ] = fld
+			else:
+				x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
+				y.append( float(attrs[ idx ]) )
+		QMessageBox.information(self.iface.mainWindow(), " ", "Jusque là aussi", QMessageBox.Ok)
+        
+		try:
+			if self.x[0] == self.x[1]:
+				xdiff = self.x[0]
+				ydiff = self.y[0] - self.y[1]
+                
+				if self.nb_series==0 or self.first_point==True:
+					self.dlg = PSTimeSeries_Dlg( ps_layer, infoFields )
+					self.dlg.plot.setData( xdiff, ydiff )
+					self.dlg.addPlotPS( xdiff, ydiff )
+					self.dlg.plot._updateLists()
+					self.window.addDlg( self.dlg )
+					self.nb_series+=1
+					self.first_point=False
+                
+				else:
+					self.window.dlg.addLayer( ps_layer, infoFields )                          
+					self.window.dlg.plot.setData( xdiff, ydiff )    
+					self.window.dlg.addPlotPS( xdiff, ydiff )   
+					self.window.dlg.plot._updateLists() 
+					self.window.dlg.refresh()                           
+					self.nb_series+=1
+			else:
+				QMessageBox.warning( self.iface.mainWindow(),"PS Time Series Viewer","No match in time." % self.ts_tablename )
 
-#-------------------------------
+			return xdiff, ydiff
+            
+		except:
+			QMessageBox.information(self.iface.mainWindow(), " ", "Whoops", QMessageBox.Ok)
 
-                    if self.x1 == self.x2:
-            x = self.x1
-            ydiff = self.y1 - self.y2
-        else:
-            QMessageBox.warning( self.iface.mainWindow(),"PS Time Series Viewer","No match in time." % self.ts_tablename )
-
-        return x, ydiff
-    #----------------
-                for idx, fld in enumerate(ps_fields):
-                if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
-                    # info fields are all except those containing dates
-                    infoFields[ idx ] = fld
-                else:
-                    x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
-                    y.append( float(attrs[ idx ]) )
-    
-    
-		except :
-			QMessageBox.information(self.iface.mainWindow(), " ", "Nope", QMessageBox.Ok)
-	
 	##### Buttons#####################################################################################################
 		
 	def search_time_series(self):

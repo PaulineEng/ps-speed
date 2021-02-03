@@ -67,9 +67,6 @@ class PSTimeSeries_Dlg(QDialog):
 		self.toolbar.updateLabelsSig.connect( self.plot.updateLabels )
 		self.toolbar.updateTitleSig.connect( self.updateTitle )
 		self.toolbar.init( self._fieldMap )
-
-	def set_ps_layer(self, ps_layer):
-		self.ps_layer = ps_layer
         
 	def enterEvent(self, event):
 		self.nav.set_cursor( NavigationToolbar.Cursor.POINTER )
@@ -360,6 +357,9 @@ class MainPSWindow(QMainWindow):
         
 		# connect signals
 		self.make_connection()
+        
+	def set_ps_layer(self, ps_layer):
+		self.ps_layer = ps_layer
 		
 	def setupUi2(self,Form):
 		"""Ajoutons ce qu'il manque à la fenêtre"""
@@ -395,9 +395,9 @@ class MainPSWindow(QMainWindow):
 			for elem in toSelect:
 				#self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
 				idx = self.ui.list_series.row(elem)
+				ps_layer = self.iface.activeLayer()
 				ps_fields = ps_layer.dataProvider().fields()
-				QMessageBox.information(self.iface.mainWindow(), " ", "Ca marche jusque là", QMessageBox.Ok)
-                
+        
 		for idx, fld in enumerate(ps_fields):
 			if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
                 # info fields are all except those containing dates
@@ -413,7 +413,7 @@ class MainPSWindow(QMainWindow):
 				ydiff = self.y[0] - self.y[1]
                 
 				if self.nb_series==0 or self.first_point==True:
-					self.dlg = PSTimeSeries_Dlg( ps_layer, infoFields )
+					self.dlg = PSTimeSeries_Dlg( self.ps_layer, infoFields )
 					self.dlg.plot.setData( xdiff, ydiff )
 					self.dlg.addPlotPS( xdiff, ydiff )
 					self.dlg.plot._updateLists()
@@ -422,7 +422,7 @@ class MainPSWindow(QMainWindow):
 					self.first_point=False
                 
 				else:
-					self.window.dlg.addLayer( ps_layer, infoFields )                          
+					self.window.dlg.addLayer( self.ps_layer, infoFields )                          
 					self.window.dlg.plot.setData( xdiff, ydiff )    
 					self.window.dlg.addPlotPS( xdiff, ydiff )   
 					self.window.dlg.plot._updateLists() 

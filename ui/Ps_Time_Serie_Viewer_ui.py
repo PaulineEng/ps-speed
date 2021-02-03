@@ -134,6 +134,7 @@ class Ui_Form(object):
         self.gridLayout_22.setObjectName("gridLayout_22")
         self.list_series = QtWidgets.QListWidget(self.scrollAreaWidgetContents_3)
         self.list_series.setMaximumSize(QtCore.QSize(16777215, 16777215))
+        self.list_series.setSelectionMode(QtWidgets.QAbstractItemView.MultiSelection)
         self.list_series.setObjectName("list_series")
         self.gridLayout_22.addWidget(self.list_series, 0, 0, 2, 1)
         self.scrollArea_3.setWidget(self.scrollAreaWidgetContents_3)

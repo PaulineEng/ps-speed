@@ -25,7 +25,7 @@ from qgis.PyQt.QtCore import Qt, QRegExp, QDate, QFileInfo, QDir, pyqtSignal
 from qgis.PyQt.QtGui import QIcon, QCursor
 from qgis.PyQt.QtWidgets import QAction, QInputDialog, QMessageBox, QApplication,QMainWindow
 
-from qgis.core import QgsMapLayer, QgsWkbTypes, QgsFeature, QgsFeatureRequest, QgsMessageLog, QgsDataSourceUri, QgsVectorLayer
+from qgis.core import QgsMapLayer, QgsWkbTypes, QgsFeature, QgsFeatureRenderer, QgsFeatureRequest, QgsMessageLog, QgsDataSourceUri, QgsVectorLayer
 
 from . import resources_rc
 
@@ -138,6 +138,9 @@ class PSTimeSeries_Plugin:
 
         ps_source = ps_layer.source()
         ps_fields = ps_layer.dataProvider().fields()
+        print(ps_fields)
+        #QgsFeatureRenderer.type( ps_fields )
+        #QgsMessageLog.logMessage( str(ps_fields) )
 
         providerType = ps_layer.providerType()
         uri = ps_source

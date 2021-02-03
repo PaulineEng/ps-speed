@@ -68,6 +68,9 @@ class PSTimeSeries_Dlg(QDialog):
 		self.toolbar.updateTitleSig.connect( self.updateTitle )
 		self.toolbar.init( self._fieldMap )
 
+	def set_ps_layer(self, ps_layer):
+		self.ps_layer = ps_layer
+        
 	def enterEvent(self, event):
 		self.nav.set_cursor( NavigationToolbar.Cursor.POINTER )
 		return QDialog.enterEvent(self, event)
@@ -380,7 +383,7 @@ class MainPSWindow(QMainWindow):
 		self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
 		self.ui.graph_loc.addWidget(self.dlg.nav,2,Qt.AlignTop)#verticalLayout_2
         
-	def plot_diff(self,dlg) :
+	def plot_diff(self) :
 		self.nb_series=0
 		toSelect = self.ui.list_series.selectedItems()
 		x, y = [], []    # lists containg x,y values
@@ -392,11 +395,10 @@ class MainPSWindow(QMainWindow):
 			for elem in toSelect:
 				#self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
 				idx = self.ui.list_series.row(elem)
-				ps_layer = self.dlg.plot.collections[idx]
-				#ps_fields = ps_layer.dataProvider().fields()
+				ps_fields = ps_layer.dataProvider().fields()
 				QMessageBox.information(self.iface.mainWindow(), " ", "Ca marche jusque là", QMessageBox.Ok)
                 
-		for idx, fld in enumerate(ps_layer):
+		for idx, fld in enumerate(ps_fields):
 			if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
                 # info fields are all except those containing dates
 				infoFields[ idx ] = fld

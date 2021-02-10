@@ -42,8 +42,8 @@ class PlotPS():
 		self._trendLines = {}
 
 	def setData(self, x, y=None, info=None):
-		self.x = x if x is not None else []
-		self.y = y if y is not None else []
+		self.x=x if x is not None else []
+		self.y=y if y is not None else []
 		self.info = info if info is not None else []   
 
 

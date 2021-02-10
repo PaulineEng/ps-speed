@@ -138,7 +138,6 @@ class PSTimeSeries_Plugin:
 
         ps_source = ps_layer.source()
         ps_fields = ps_layer.dataProvider().fields()
-        print(ps_fields)
         #QgsFeatureRenderer.type( ps_fields )
         #QgsMessageLog.logMessage( str(ps_fields) )
 
@@ -277,11 +276,11 @@ class PSTimeSeries_Plugin:
             if self.nb_series==0 or self.first_point==True:
                     #QMessageBox.warning(self.iface.mainWindow(), "infos", "x="+str(x[0])+"; y="+str(y[0]))
                 self.dlg = PSTimeSeries_Dlg( ps_layer, infoFields )
-                self.dlg.setFeatureId( fid ) 
-                self.dlg.plot.setData( x, y )  
+                self.dlg.setFeatureId( fid )
+                self.dlg.plot.setData( x, y )
                 self.dlg.addPlotPS( x, y )
                 self.dlg.plot._updateLists()
-                self.window.addDlg( self.dlg ) 
+                self.window.addDlg( self.dlg )
                 self.nb_series+=1
                 self.first_point=False
                 

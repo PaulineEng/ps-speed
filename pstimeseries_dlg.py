@@ -42,6 +42,7 @@ from .ui.Ps_Time_Serie_Viewer_ui import Ui_Form
 from .MapTools import FeatureFinder
 
 
+
 class PSTimeSeries_Dlg(QDialog):
 
 	featureChanged = pyqtSignal()
@@ -346,17 +347,17 @@ class MainPSWindow(QMainWindow):
 		QMainWindow.__init__(self, parent=parent)
         
 		# build ui
-		self.ui=Ui_Form()
-		self.ui.setupUi(self)
-		self.setCentralWidget(self.ui.PS_Time_Viewer)
-		self.first_point=True
+		self.ui=Ui_Form() #Appelle la fenêtre
+		self.ui.setupUi(self) #Construit l'interface
+		self.setCentralWidget(self.ui.PS_Time_Viewer) #Définit la fenêtre principal de l'interface
+		self.first_point=True 
 		
 		# Set up the user interface from Designer.
-		self.iface=iface
-		self.canvas=iface.mapCanvas()
+		self.iface=iface 
+		self.canvas=iface.mapCanvas() #Lie QGIS et la fenêtre
         
 		# connect signals
-		self.make_connection()
+		self.make_connection() #Relie les boutons aux actions
         
 	def set_ps_layer(self, ps_layer):
 		self.ps_layer = ps_layer
@@ -382,38 +383,71 @@ class MainPSWindow(QMainWindow):
 		self.ui.graph_loc.addWidget(self.dlg.toolbar,0,Qt.AlignTop)#gridLayout_21
 		self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
 		self.ui.graph_loc.addWidget(self.dlg.nav,2,Qt.AlignTop)#verticalLayout_2
-        
-	def plot_diff(self) :
-		self.nb_series=0
-		toSelect = self.ui.list_series.selectedItems()
+    
+	def get_diff(self,toSelect):
 		x, y = [], []    # lists containg x,y values
-		infoFields = {}    # hold the index->name of the fields containing info to be displayed
-		feat = QgsFeature()
-		attrs = feat.attributes()
+		self.infoFields = {}    # hold the index->name of the fields containing info to be displayed
         
-		if toSelect != []:
+		fid = []
+		x = []
+		y = []
+		if len(toSelect) == 2:
 			for elem in toSelect:
 				#self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
 				idx = self.ui.list_series.row(elem)
-				ps_layer = self.iface.activeLayer()
-				ps_fields = ps_layer.dataProvider().fields()
+				fid.append(int(str(elem.text()).split()[-1]))
+				x.append(x)
+				y.append(y)
+				print("x", x)
+				print("y", y)
+				print("fid",fid)
+		else:
+			QMessageBox.information(self.iface.mainWindow(), " ", "Sélectionner 2 points", QMessageBox.Ok)
+        
+		ps_layer = self.iface.activeLayer()
+		ps_fields = ps_layer.dataProvider().fields()
+		print("ps_fields",ps_fields)
+		feat = QgsFeature()
+		#feats = ps_layer.getFeatures( QgsFeatureRequest(fid) )
+		#feats.nextFeature(feat)
+		attrs = feat.attributes()
+# 		print("feat",feat)
+# 		print("attrs",attrs)
+		print(x,y)
         
 		for idx, fld in enumerate(ps_fields):
 			if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
                 # info fields are all except those containing dates
-				infoFields[ idx ] = fld
+				self.infoFields[ idx ] = fld
 			else:
-				x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
-				y.append( float(attrs[ idx ]) )
-		QMessageBox.information(self.iface.mainWindow(), " ", "Jusque là aussi", QMessageBox.Ok)
-        
+				coor = []
+				for i in len(fid):
+					for j in len(ps_fields):
+						coor.append(self.plotps)
+# 						x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
+						print("coor", coor)
+						iterator = ps_layer.getFeatures(QgsFeatureRequest().setFilterFid(fid))
+						feature = next(iterator)
+# 						y.append( float(attrs[ idx ]) )
+# 						print("y", y)
+                
+		QMessageBox.information(self.iface.mainWindow(), " ", "Hourra", QMessageBox.Ok)
+    
+		return x, y
+    
+	def plot_diff(self) :
+		self.nb_series=0
+		toSelect = self.ui.list_series.selectedItems()
+		print(toSelect)
+		Selected = self.get_diff( toSelect )
+
 		try:
 			if self.x[0] == self.x[1]:
 				xdiff = self.x[0]
 				ydiff = self.y[0] - self.y[1]
                 
 				if self.nb_series==0 or self.first_point==True:
-					self.dlg = PSTimeSeries_Dlg( self.ps_layer, infoFields )
+					self.dlg = PSTimeSeries_Dlg( self.ps_layer, self.infoFields )
 					self.dlg.plot.setData( xdiff, ydiff )
 					self.dlg.addPlotPS( xdiff, ydiff )
 					self.dlg.plot._updateLists()
@@ -422,7 +456,7 @@ class MainPSWindow(QMainWindow):
 					self.first_point=False
                 
 				else:
-					self.window.dlg.addLayer( self.ps_layer, infoFields )                          
+					self.window.dlg.addLayer( self.ps_layer, self.infoFields )                          
 					self.window.dlg.plot.setData( xdiff, ydiff )    
 					self.window.dlg.addPlotPS( xdiff, ydiff )   
 					self.window.dlg.plot._updateLists() 

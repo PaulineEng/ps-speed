@@ -41,6 +41,8 @@ from .ui.Ps_Time_Serie_Viewer_ui import Ui_Form
 
 from .MapTools import FeatureFinder
 
+import datetime
+
 
 
 class PSTimeSeries_Dlg(QDialog):
@@ -86,6 +88,7 @@ class PSTimeSeries_Dlg(QDialog):
 	def addPlotPS(self,x,y):
 		self.plotps=PlotPS(x,y)
 		self.plot.collections.append(self.plotps)
+        #print("x",self.plotps.x)
 	
 	def createPlot(self):
 		return PlotGraph()
@@ -387,83 +390,61 @@ class MainPSWindow(QMainWindow):
 	def get_diff(self,toSelect):
 		x, y = [], []    # lists containg x,y values
 		self.infoFields = {}    # hold the index->name of the fields containing info to be displayed
+		#classe = PSTimeSeries_Dlg()
         
 		fid = []
-		x = []
-		y = []
 		if len(toSelect) == 2:
 			for elem in toSelect:
 				#self.ui.graph_loc.addWidget(self.dlg.plot,40,Qt.AlignTop)#verticalLayout_2
 				idx = self.ui.list_series.row(elem)
 				fid.append(int(str(elem.text()).split()[-1]))
-				x.append(x)
-				y.append(y)
-				print("x", x)
-				print("y", y)
-				print("fid",fid)
+				x.append(self.dlg.plotps.x)
+				y.append(self.dlg.plotps.y)
 		else:
-			QMessageBox.information(self.iface.mainWindow(), " ", "Sélectionner 2 points", QMessageBox.Ok)
-        
-		ps_layer = self.iface.activeLayer()
-		ps_fields = ps_layer.dataProvider().fields()
-		print("ps_fields",ps_fields)
-		feat = QgsFeature()
-		#feats = ps_layer.getFeatures( QgsFeatureRequest(fid) )
-		#feats.nextFeature(feat)
-		attrs = feat.attributes()
-# 		print("feat",feat)
-# 		print("attrs",attrs)
-		print(x,y)
-        
-		for idx, fld in enumerate(ps_fields):
-			if QRegExp( "D\\d{8}", Qt.CaseInsensitive ).indexIn( fld.name() ) < 0:
-                # info fields are all except those containing dates
-				self.infoFields[ idx ] = fld
-			else:
-				coor = []
-				for i in len(fid):
-					for j in len(ps_fields):
-						coor.append(self.plotps)
-# 						x.append( QDate.fromString( fld.name()[1:], "yyyyMMdd" ).toPyDate() )
-						print("coor", coor)
-						iterator = ps_layer.getFeatures(QgsFeatureRequest().setFilterFid(fid))
-						feature = next(iterator)
-# 						y.append( float(attrs[ idx ]) )
-# 						print("y", y)
+			QMessageBox.information(self.iface.mainWindow(), "PS Time Series Viewer", "Sélectionner 2 points", QMessageBox.Ok)
                 
-		QMessageBox.information(self.iface.mainWindow(), " ", "Hourra", QMessageBox.Ok)
-    
 		return x, y
     
 	def plot_diff(self) :
 		self.nb_series=0
 		toSelect = self.ui.list_series.selectedItems()
-		print(toSelect)
-		Selected = self.get_diff( toSelect )
-
+		selected = self.get_diff( toSelect )
+		
+		year = []
+		month = []
+		day = []
+		for i in range(len(selected[0][0])) : #Transformer les datetime
+			print("test",datetime.date.year)
+			year.append(int(datetime.date.year))
+			month.append(int(datetime.date.month))
+			day.append(int(datetime.date.day))
+			print(year)
+			#selected[0][1]:
+			print("selected",selected[0][0])
+			xdiff = selected[0][0]
+			ydiff = selected[1][0] - selected[1][1]
+			print("xdiff", xdiff)
+			print("ydiff", ydiff)
+		else:
+			QMessageBox.warning( self.iface.mainWindow(),"PS Time Series Viewer","No match in time." % self.ts_tablename )
+		
 		try:
-			if self.x[0] == self.x[1]:
-				xdiff = self.x[0]
-				ydiff = self.y[0] - self.y[1]
+			if self.nb_series==0 or self.first_point==True:
+				self.dlg = PSTimeSeries_Dlg( self.ps_layer, self.infoFields )
+				self.dlg.plot.setData( xdiff, ydiff )
+				self.dlg.addPlotPS( xdiff, ydiff )
+				self.dlg.plot._updateLists()
+				self.window.addDlg( self.dlg )
+				self.nb_series+=1
+				self.first_point=False
                 
-				if self.nb_series==0 or self.first_point==True:
-					self.dlg = PSTimeSeries_Dlg( self.ps_layer, self.infoFields )
-					self.dlg.plot.setData( xdiff, ydiff )
-					self.dlg.addPlotPS( xdiff, ydiff )
-					self.dlg.plot._updateLists()
-					self.window.addDlg( self.dlg )
-					self.nb_series+=1
-					self.first_point=False
-                
-				else:
-					self.window.dlg.addLayer( self.ps_layer, self.infoFields )                          
-					self.window.dlg.plot.setData( xdiff, ydiff )    
-					self.window.dlg.addPlotPS( xdiff, ydiff )   
-					self.window.dlg.plot._updateLists() 
-					self.window.dlg.refresh()                           
-					self.nb_series+=1
 			else:
-				QMessageBox.warning( self.iface.mainWindow(),"PS Time Series Viewer","No match in time." % self.ts_tablename )
+				self.window.dlg.addLayer( self.ps_layer, self.infoFields )                          
+				self.window.dlg.plot.setData( xdiff, ydiff )    
+				self.window.dlg.addPlotPS( xdiff, ydiff )   
+				self.window.dlg.plot._updateLists() 
+				self.window.dlg.refresh()                           
+				self.nb_series+=1
 
 			return xdiff, ydiff
             

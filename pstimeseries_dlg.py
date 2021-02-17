@@ -446,7 +446,7 @@ class MainPSWindow(QMainWindow):
 			self.first_point=False
                 
 		else:
-			self.window.dlg.addLayer( self.ps_layer, self.infoFields )                       
+			self.window.dlg.addLayer( layer, infoFields )                       
 			self.window.dlg.plot.setData( xdiff, ydiff )
 			self.window.dlg.addPlotPS( xdiff, ydiff )
 			self.window.dlg.plot._updateLists()
